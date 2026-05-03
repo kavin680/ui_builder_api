@@ -1,0 +1,318 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id            Int            @id @default(autoincrement())
+  email         String         @unique
+  userName      String?        @map("user_name")
+  password      String
+  role          UserRole       @default(ADMIN)
+  isActive      Boolean        @default(true) @map("is_active")
+  createdAt     DateTime       @default(now()) @map("created_at")
+  updatedAt     DateTime       @updatedAt @map("updated_at")
+  refreshTokens RefreshToken[]
+
+  @@map("user")
+}
+
+model RefreshToken {
+  id        Int      @id @default(autoincrement())
+  token     String
+  userId    Int      @map("user_id")
+  createdAt DateTime @default(now()) @map("created_at")
+  revoked   Boolean  @default(false)
+  user      User     @relation(fields: [userId], references: [id])
+
+  @@index([userId], map: "refresh_token_user_id_fkey")
+  @@map("refresh_token")
+}
+
+model GlobalConfiguration {
+  id                  BigInt                   @id @default(autoincrement())
+  name                String                   @unique @db.VarChar(100)
+  description         String?                  @db.VarChar(255)
+  maxReadingVariables Int                      @map("max_reading_variables")
+  maxWritingVariables Int                      @map("max_writing_variables")
+  alterFlag           Boolean                  @map("alter_flag")
+  isActive            Boolean                  @map("is_active")
+  createdAt           DateTime                 @default(now()) @map("created_at")
+  updatedAt           DateTime                 @updatedAt @map("updated_at")
+  dataSourceConfig    DataSourceConfiguration?
+  freezeConfigs       FreezeConfiguration[]
+  readingVariables    ReadingVariable[]
+  writingVariables    WritingVariable[]
+
+  @@map("global_configuration")
+}
+
+model DataSourceConfiguration {
+  id             BigInt              @id @default(autoincrement())
+  globalConfigId BigInt              @unique @map("global_config_id")
+  type           DataSourceType
+  host           String?
+  port           Int?
+  username       String?
+  password       String?
+  qos            Int?                @default(0)
+  retain         Boolean?            @default(false)
+  caPath         String?
+  certPath       String?
+  createdAt      DateTime            @default(now())
+  isActive       Boolean             @default(true)
+  keyPath        String?
+  protocol       String?
+  updatedAt      DateTime            @updatedAt
+  globalConfig   GlobalConfiguration @relation(fields: [globalConfigId], references: [id], onDelete: Cascade)
+  topics         DataSourceTopic[]
+
+  @@map("data_source_configuration")
+}
+
+model DataSourceTopic {
+  id        BigInt                  @id @default(autoincrement())
+  configId  BigInt                  @map("config_id")
+  topic     String
+  type      TopicType
+  createdAt DateTime                @default(now())
+  config    DataSourceConfiguration @relation(fields: [configId], references: [id], onDelete: Cascade)
+
+  @@index([configId], map: "data_source_topic_config_id_fkey")
+  @@map("data_source_topic")
+}
+
+model ReadingVariable {
+  id             BigInt                          @id @default(autoincrement())
+  globalConfigId BigInt                          @map("global_config_id")
+  name           String                          @db.VarChar(100)
+  sequenceNo     Int                             @default(0) @map("sequence_no")
+  value          String?                         @db.VarChar(100)
+  functionName   String?                         @map("function_name") @db.VarChar(100)
+  startIndex     Int?                            @map("start_index")
+  isActive       Boolean                         @default(true) @map("is_active")
+  createdAt      DateTime                        @default(now()) @map("created_at")
+  updatedAt      DateTime                        @updatedAt @map("updated_at")
+  historyType    HistoryType                     @default(NONE) @map("history_type")
+  lastRunAt      DateTime?                       @map("last_run_at")
+  loggingTime    Int?                            @map("logging_time")
+  next_run_at    DateTime?
+  alarms         Alarm[]
+  globalConfig   GlobalConfiguration             @relation(fields: [globalConfigId], references: [id], onDelete: Cascade)
+  history        ReadingVariableHistory[]
+  utilityHistory ReadingVariableUtilityHistory[]
+
+  @@unique([globalConfigId, name])
+  @@index([globalConfigId])
+  @@index([globalConfigId, sequenceNo])
+  @@index([next_run_at])
+  @@index([isActive, historyType])
+  @@index([historyType, isActive, next_run_at])
+  @@map("reading_variable")
+}
+
+model ReadingVariableHistory {
+  id                BigInt          @id @default(autoincrement())
+  readingVariableId BigInt          @map("reading_variable_id")
+  value             String          @db.VarChar(100)
+  recordedAt        DateTime        @default(now()) @map("recorded_at")
+  readingVariable   ReadingVariable @relation(fields: [readingVariableId], references: [id], onDelete: Cascade)
+
+  @@index([readingVariableId, recordedAt])
+  @@map("reading_variable_history")
+}
+
+model ReadingVariableUtilityHistory {
+  id                BigInt          @id @default(autoincrement())
+  readingVariableId BigInt          @map("reading_variable_id")
+  value             String          @db.VarChar(100)
+  recordedAt        DateTime        @default(now()) @map("recorded_at")
+  readingVariable   ReadingVariable @relation(fields: [readingVariableId], references: [id], onDelete: Cascade)
+
+  @@index([readingVariableId, recordedAt])
+  @@map("reading_variable_utility_history")
+}
+
+model WritingVariable {
+  id             BigInt                     @id @default(autoincrement())
+  globalConfigId BigInt                     @map("global_config_id")
+  name           String                     @db.VarChar(100)
+  sequenceNo     Int                        @default(0) @map("sequence_no")
+  functionName   String?                    @map("function_name") @db.VarChar(100)
+  isActive       Boolean                    @default(true) @map("is_active")
+  createdAt      DateTime                   @default(now()) @map("created_at")
+  updatedAt      DateTime                   @updatedAt @map("updated_at")
+  rawValue       String?                    @map("raw_value") @db.VarChar(255)
+  value          Decimal?                   @db.Decimal(18, 2)
+  hasMbo         Boolean                    @default(false) @map("has_mbo")
+  globalConfig   GlobalConfiguration        @relation(fields: [globalConfigId], references: [id], onDelete: Cascade)
+  freezeMaps     WritingVariableFreezeMap[]
+  mboVariables   WritingVariableMbo[]
+
+  @@unique([globalConfigId, name])
+  @@index([globalConfigId])
+  @@index([globalConfigId, sequenceNo])
+  @@map("writing_variable")
+}
+
+model WritingVariableMbo {
+  id                BigInt                     @id @default(autoincrement())
+  writingVariableId BigInt                     @map("writing_variable_id")
+  name              String                     @db.VarChar(100)
+  value             Decimal?                   @db.Decimal(18, 2)
+  sequenceNo        Int                        @default(0) @map("sequence_no")
+  createdAt         DateTime                   @default(now()) @map("created_at")
+  updatedAt         DateTime                   @updatedAt @map("updated_at")
+  freezeMaps        WritingVariableFreezeMap[]
+  writingVariable   WritingVariable            @relation(fields: [writingVariableId], references: [id], onDelete: Cascade)
+
+  @@index([writingVariableId])
+  @@map("writing_variable_mbo")
+}
+
+model FreezeConfiguration {
+  id             BigInt                     @id @default(autoincrement())
+  name           String                     @db.VarChar(100)
+  globalConfigId BigInt                     @map("global_config_id")
+  isActive       Boolean                    @default(true) @map("is_active")
+  createdAt      DateTime                   @default(now()) @map("created_at")
+  updatedAt      DateTime                   @updatedAt @map("updated_at")
+  globalConfig   GlobalConfiguration        @relation(fields: [globalConfigId], references: [id], onDelete: Cascade)
+  timeWindows    FreezeTimeWindow[]
+  variables      WritingVariableFreezeMap[]
+
+  @@index([globalConfigId], map: "freeze_configuration_global_config_id_fkey")
+  @@map("freeze_configuration")
+}
+
+model FreezeTimeWindow {
+  id             BigInt              @id @default(autoincrement())
+  freezeConfigId BigInt              @map("freeze_config_id")
+  dayOfWeek      Int
+  startTime      DateTime            @map("start_time") @db.Time(3)
+  endTime        DateTime            @map("end_time") @db.Time(3)
+  freezeConfig   FreezeConfiguration @relation(fields: [freezeConfigId], references: [id], onDelete: Cascade)
+
+  @@index([freezeConfigId])
+  @@index([dayOfWeek])
+  @@map("freeze_time_window")
+}
+
+model WritingVariableFreezeMap {
+  id                   BigInt              @id @default(autoincrement())
+  writingVariableId    BigInt              @map("writing_variable_id")
+  freezeConfigId       BigInt              @map("freeze_config_id")
+  valueOnStart         Decimal?            @map("value_on_start") @db.Decimal(18, 2)
+  valueOnEnd           Decimal?            @map("value_on_end") @db.Decimal(18, 2)
+  lastStartTriggeredAt DateTime?           @map("last_start_triggered_at")
+  lastEndTriggeredAt   DateTime?           @map("last_end_triggered_at")
+  nextStartRunAt       DateTime?           @map("next_start_run_at")
+  nextEndRunAt         DateTime?           @map("next_end_run_at")
+  mboVariableId        BigInt?             @map("mbo_variable_id")
+  freezeConfig         FreezeConfiguration @relation(fields: [freezeConfigId], references: [id], onDelete: Cascade)
+  mbo                  WritingVariableMbo? @relation(fields: [mboVariableId], references: [id], onDelete: Cascade)
+  writingVariable      WritingVariable     @relation(fields: [writingVariableId], references: [id], onDelete: Cascade)
+
+  @@unique([writingVariableId, mboVariableId, freezeConfigId])
+  @@index([nextStartRunAt])
+  @@index([nextEndRunAt])
+  @@index([freezeConfigId], map: "writing_variable_freeze_map_freeze_config_id_fkey")
+  @@index([mboVariableId], map: "writing_variable_freeze_map_mbo_variable_id_fkey")
+  @@map("writing_variable_freeze_map")
+}
+
+model Alarm {
+  id                BigInt          @id @default(autoincrement())
+  readingVariableId BigInt          @map("reading_variable_id")
+  name              String          @map("alarm_name") @db.VarChar(100)
+  conditionType     AlarmCondition  @map("condition_type")
+  thresholdValue    Decimal         @map("threshold_value") @db.Decimal(18, 2)
+  priority          AlarmPriority   @default(MEDIUM)
+  isEnabled         Boolean         @default(true) @map("is_enabled")
+  createdAt         DateTime        @default(now()) @map("created_at")
+  updatedAt         DateTime        @updatedAt @map("updated_at")
+  history           AlarmHistory[]
+  status            AlarmStatus?
+  readingVariable   ReadingVariable @relation(fields: [readingVariableId], references: [id], onDelete: Cascade)
+
+  @@index([readingVariableId], map: "alarms_reading_variable_id_fkey")
+  @@map("alarms")
+}
+
+model AlarmStatus {
+  alarmId        BigInt    @id @map("alarm_id")
+  isActive       Boolean   @default(false) @map("is_active")
+  isAcknowledged Boolean   @default(false) @map("is_acknowledged")
+  activeSince    DateTime? @map("active_since")
+  acknowledgedAt DateTime? @map("acknowledged_at")
+  clearedAt      DateTime? @map("cleared_at")
+  alarm          Alarm     @relation(fields: [alarmId], references: [id], onDelete: Cascade)
+
+  @@map("alarm_status")
+}
+
+model AlarmHistory {
+  id           BigInt       @id @default(autoincrement())
+  alarmId      BigInt       @map("alarm_id")
+  eventType    AlarmLogType @map("event_type")
+  eventTime    DateTime     @default(now()) @map("event_time")
+  valueAtEvent String       @map("value_at_event") @db.VarChar(100)
+  userId       Int?         @map("user_id")
+  alarm        Alarm        @relation(fields: [alarmId], references: [id], onDelete: Cascade)
+
+  @@index([alarmId, eventTime])
+  @@map("alarm_history")
+}
+
+enum UserRole {
+  ADMIN
+  ENGINEER
+  OPERATOR
+  VIEWER
+}
+
+enum DataSourceType {
+  MQTT
+  SOCKET
+}
+
+enum HistoryType {
+  NONE
+  INSTANT
+  ON_CHANGE
+  SCHEDULED
+  UTILITY
+}
+
+enum AlarmCondition {
+  GT  @map(">")
+  LT  @map("<")
+  GTE @map(">=")
+  LTE @map("<=")
+  EQ  @map("==")
+  NEQ @map("!=")
+}
+
+enum AlarmLogType {
+  I
+  IO
+  IA
+  IOA
+  IAO
+}
+
+enum AlarmPriority {
+  LOW
+  MEDIUM
+  HIGH
+  CRITICAL
+}
+
+enum TopicType {
+  SUBSCRIBE
+  PUBLISH
+}

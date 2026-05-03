@@ -1,0 +1,39 @@
+services:
+  db:
+    image: mariadb:10.11
+    container_name: ui-builder-db
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: root_password
+      MYSQL_DATABASE: ui_builder
+      MYSQL_USER: ui_user
+      MYSQL_PASSWORD: ui_password
+    volumes:
+      - mysql_data:/var/lib/mysql
+    ports:
+      - "3306:3306"
+
+  redis:
+    image: redis:alpine
+    container_name: ui-builder-redis
+    restart: always
+    ports:
+      - "6379:6379"
+
+  api:
+    build: .
+    container_name: ui-builder-api
+    restart: always
+    environment:
+      DATABASE_URL: "mysql://ui_user:ui_password@db:3306/ui_builder"
+      REDIS_HOST: "redis"
+      REDIS_PORT: 6379
+      PORT: 3000
+    depends_on:
+      - db
+      - redis
+    ports:
+      - "3000:3000"
+
+volumes:
+  mysql_data:
